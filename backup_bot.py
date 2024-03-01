@@ -26,95 +26,78 @@ class Bot:
       player_stacks = list()
       for player_info in obs.player_infos:
          player_stacks.append(player_info.stack)
-      my_stack = obs.get_my_player_info().stack
-      player_stacks.append(my_stack)
-      player_stacks.sort()
-      my_index = player_stacks.index(my_stack)
-      middle_index = len(player_stacks)//2
-      my_bias = 0.05 * (my_index - middle_index)
 
       # If in preflop, run do_preflop, otherwise postflop   
       if obs.current_round == 0:
-         return self.do_preflop(my_bias, obs)
+         return self.do_preflop(obs)
       else:
-         return self.do_postflop(my_bias, obs)
+         return self.do_postflop(obs)
 
    # Action to take during preflop   
-   def do_preflop(self, my_bias, obs: Observation):
+   def do_preflop(self, obs: Observation):
       # do_preflop_open if nobody raised, else preflop_response
       raise_actions = [action for action in obs.get_actions_this_round() if action.action > 1]
       if len(raise_actions) == 0:
-         return self.do_preflop_open(my_bias, obs)
+         return self.do_preflop_open(obs)
       else:
-         return self.do_preflop_response(my_bias, obs)
+         return self.do_preflop_response(obs)
    
    # If hand in r51 range, pot raise by 50%, else call/check
-   def do_preflop_open(self, my_bias, obs:Observation):
+   def do_preflop_open(self, obs:Observation):
       open_raise_range = self.r51
       if open_raise_range.is_hand_in_range(obs.my_hand):
          return obs.get_fraction_pot_raise(0.50)
       else:
          return 1
 
-   # Calculate our odds, and play it safer based on it
-   def do_preflop_response(self, my_bias, obs:Observation):
-      call_odds = obs.get_call_size() / obs.get_pot_size() + my_bias
+   # If 
+   def do_preflop_response(self, obs:Observation):
+      call_odds = obs.get_call_size() / obs.get_pot_size()
       if call_odds < 0.1:
-         return 1
-      elif call_odds < 0.2:
-         range_of_cards = self.r30
-      elif call_odds < 0.4:
-         range_of_cards = self.r22
+         return 1 #call all small raises
+      elif call_odds < 0.3:
+         r = self.r16
       elif call_odds < 0.6:
-         range_of_cards = self.r17
-      elif call_odds < 0.8:
-         range_of_cards = self.r12
-      elif call_odds < 0.9:
-         range_of_cards = self.r9
+         r = self.r10
       else:
-         range_of_cards = self.r7
+         r = self.r6
 
-      if range_of_cards.is_hand_in_range(obs.my_hand):
+      if r.is_hand_in_range(obs.my_hand):
          return 1
       else:
          return 0
 
-   # After first round, we return based on if anyone raised or not
-   def do_postflop(self, my_bias, obs:Observation):
+   def do_postflop(self, obs:Observation):
       if obs.get_call_size() == 0:
-         return self.do_post_flop_open(my_bias, obs)
+         return self.do_post_flop_open(obs)
       else:
-         return self.do_post_flop_response(my_bias, obs)
+         return self.do_post_flop_response(obs)
 
-   # If player raised
-   def do_post_flop_open(self, my_bias, obs:Observation):
+   def do_post_flop_open(self, obs:Observation):
       if self.is_hand_ace_or_better(obs):
-         return obs.get_fraction_pot_raise(0.7+my_bias)
+         return obs.get_fraction_pot_raise(1)
 
-   # Check if hand is Ace or Better
    def is_hand_ace_or_better(self, obs:Observation):
       my_hand_type = obs.get_my_hand_type()
       return my_hand_type >= HandType.PAIR or self.is_card_rank_in_hand('A', obs.my_hand)
 
-   # Checks if card ranks in hand
    def is_card_rank_in_hand(self, rank, hand):
       return rank in hand[0] or rank in hand[1]
 
-   # Soemome raised in postflop
-   def do_post_flop_response(self, my_bias, obs: Observation):
-      call_odds = obs.get_call_size() / obs.get_pot_size() + my_bias
+   def do_post_flop_response(self, obs: Observation):
+      call_odds = obs.get_call_size() / obs.get_pot_size()
       my_hand_type = obs.get_my_hand_type()
       if call_odds < 0.1:
-         return obs.get_fraction_pot_raise(0.1 + my_bias)
-      elif call_odds < 0.2:
+         return 1 #call all small raises
+      elif call_odds < 0.3:
          if my_hand_type >= HandType.PAIR and my_hand_type.value > obs.get_board_hand_type().value:
-            return obs.get_fraction_pot_raise(0.2 + my_bias)
-      elif call_odds < 0.5:
+            return 1
+      elif call_odds < 0.6:
          if my_hand_type > HandType.PAIR and my_hand_type.value > obs.get_board_hand_type().value+1:
-            return obs.get_fraction_pot_raise(0.2 + my_bias)
+            return 1
       else:
          if my_hand_type > HandType.TWOPAIR and my_hand_type.value > obs.get_board_hand_type().value+1:
-            return obs.get_fraction_pot_raise(0.2 + my_bias)
+            return 1
 
       return 0
 
